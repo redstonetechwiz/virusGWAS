@@ -17,12 +17,9 @@ Interactive web tool for exploring viral GWAS associations from the NHGRI-EBI GW
 
 ## Usage
 
-Simply open `source_explorer_with_ld.html` in a web browser. No installation required.
+Simply open `index.html` in a web browser. No installation required.
 
 ## Privacy
 
 All data processing happens locally in your browser. Your genotype file is never transmitted to any server.
 
---
-
-RCJH!
