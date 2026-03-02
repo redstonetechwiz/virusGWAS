@@ -355,12 +355,12 @@
     async function init() {
       try {
         // Load all SNPs data
-        const allResp = await fetch('source_filtered_p5e8_superkit_rs_only_viral.tsv');
+        const allResp = await fetch('./source_filtered_p5e8_superkit_rs_only_viral.tsv');
         const allText = await allResp.text();
         allData = parseCSV(allText);
 
         // Load lead SNPs data
-        const leadsResp = await fetch('source_filtered_p5e8_superkit_rs_only_viral_ld_leads_only.tsv');
+        const leadsResp = await fetch('./source_filtered_p5e8_superkit_rs_only_viral_ld_leads_only.tsv');
         const leadsText = await leadsResp.text();
         leadsData = parseCSV(leadsText);
 
