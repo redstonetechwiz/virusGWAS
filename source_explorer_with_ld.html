@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Viral GWAS Browser - with LD Clumping</title>
+  <style>
+    :root {
+      /* KU Primary Colors */
+      --ku-blue: #0051ba;
+      --ku-crimson: #e8000d;
+      
+      /* KU Secondary Colors */
+      --ku-night: #003459;
+      --ku-lake: #2767ff;
+      --ku-sky: #73cbf2;
+      --ku-wheat: #f2a900;
+      --ku-fire: #ff3042;
+      --ku-fog: #8e9fbc;
+      --ku-steam: #dde5ed;
+      
+      /* Palette mapping for site functionality */
+      --muted: #7b8794;
+      --text: #1f2937;
+      --accent: var(--ku-blue);
+      --ok: #16a34a;
+      --warn: var(--ku-wheat);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: linear-gradient(135deg, var(--ku-blue) 0%, var(--ku-night) 100%);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1800px;
+      margin: 20px auto;
+      padding: 24px;
+      background: #ffffff;
+      border-radius: 16px;
+      border-left: 6px solid var(--ku-brick);
+      box-shadow: 0 20px 60px rgba(85, 90, 130, 0.18);
+    }
+    h1 { margin: 0 0 6px; font-size: 1.9rem; color: #111827; }
+    .sub { color: var(--muted); margin-bottom: 16px; font-size: 0.95rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-left: 4px solid var(--ku-brick);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .card .k { color: var(--muted); font-size: 0.82rem; }
+    .card .v { font-size: 1.25rem; font-weight: 700; margin-top: 4px; color: #111827; }
+    .card.risk-card .v { color: var(--ku-crimson); }
+    .card.het-card .v { color: var(--ku-wheat); }
+    .card.protect-card .v { color: #16a34a; }
+    .upload-controls {
+      background: #f8f9fa;
+      border: 1px solid #e5e7eb;
+      border-left: 4px solid var(--ku-brick);
+      border-radius: 12px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr 2fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+    .controls {
+      background: #f8f9fa;
+      border: 1px solid #e5e7eb;
+      border-left: 4px solid var(--ku-brick);
+      border-radius: 12px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1.4fr 2fr 1fr 1fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+    .filter-btn {
+      padding: 10px 20px;
+      border: 2px solid #dee2e6;
+      background: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.3s;
+    }
+    .filter-btn:hover {
+      border-color: var(--ku-blue);
+      color: var(--ku-blue);
+    }
+    .filter-btn.active {
+      background: var(--ku-blue);
+      border-color: var(--ku-blue);
+      color: white;
+    }
+    .toggle-group {
+      display: flex;
+      gap: 6px;
+      grid-column: 1;
+    }
+    .toggle-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .toggle-btn.active {
+      background: var(--ku-blue);
+      border-color: var(--ku-blue);
+      color: white;
+    }
+    label { font-size: 0.78rem; color: var(--muted); display: block; margin-bottom: 4px; }
+    input, select, button {
+      background: #ffffff;
+      color: #111827;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    select, input { width: 100%; }
+    button { cursor: pointer; font-weight: 600; }
+    button.primary { background: var(--ku-blue); border-color: var(--ku-blue); color: white; }
+    button.ghost { background: #fff; }
+    .upload-btn { white-space: nowrap; transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease; }
+    .upload-btn.ready { background: var(--ku-blue); border-color: var(--ku-blue); color: white; }
+    .upload-btn.ready:hover { background: var(--ku-night); border-color: var(--ku-night); color: white; }
+    .upload-btn.loading,
+    .upload-btn.loaded { background: var(--ku-blue); border-color: var(--ku-blue); color: white; }
+    .upload-btn:disabled { opacity: 0.9; cursor: not-allowed; }
+    .status {
+      margin: 8px 0 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #f8fafc;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #111827;
+      cursor: pointer;
+    }
+    th:hover { background: #eef2ff; }
+    td {
+      padding: 10px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    tr:hover { background: #f9fafb; }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .badge.risk { background: var(--ku-crimson); color: #ffffff; }
+    .badge.het { background: var(--ku-wheat); color: #111827; }
+    .badge.protect { background: #16a34a; color: #ffffff; }
+    .genotype {
+      display: inline-block;
+      font-family: 'Courier New', monospace;
+      background: #f0f4f8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .risk-allele {
+      display: inline-block;
+      font-family: 'Courier New', monospace;
+      background: #f0f4f8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .pmid-link { color: var(--ku-night); text-decoration: none; }
+    .pmid-link:hover { text-decoration: underline; }
+    .pagination {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 12px;
+      font-size: 0.9rem;
+    }
+    .page-btn {
+      padding: 6px 12px;
+      border: 1px solid #d1d5db;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .page-btn.active { background: var(--ku-blue); color: white; border-color: var(--ku-blue); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Viral GWAS Associations</h1>
+    <p class="sub">
+      Browse GWAS associations for viral infections and immune responses.
+      Toggle between <strong>all associated SNPs</strong> (<span id="count-all">--</span> rows) or <strong>independent lead SNPs</strong> (<span id="count-leads">--</span> loci after LD clumping).
+    </p>
+    <p class="sub" style="background: #f0f9ff; border-left: 4px solid var(--ku-blue); padding: 12px; border-radius: 6px; margin: 12px 0;">
+      <strong>Data Source:</strong> NHGRI-EBI GWAS Catalog v1.0.2 (Cerezo et al., <em>Nucleic Acids Research</em>, 2025, 53(D1):D998–D1005; <a href="https://doi.org/10.1093/nar/gkae1070" style="color: var(--ku-blue); text-decoration: none;">doi:10.1093/nar/gkae1070</a>). LD clumping performed using 1000 Genomes Project reference data (1000 Genomes Project Consortium, <em>Nature</em>, 2015, 526(7571):68–74; <a href="https://doi.org/10.1038/nature15393" style="color: var(--ku-blue); text-decoration: none;">doi:10.1038/nature15393</a>) with multi-population approach (EUR, AFR, EAS, AMR, SAS). Data filtered for P-value ≤ 5×10⁻⁸ and virus-related traits.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="k">Total SNPs</div>
+        <div class="v" id="stat-total">--</div>
+      </div>
+      <div class="card risk-card">
+        <div class="k">Increased Risk</div>
+        <div class="v" id="stat-risk">--</div>
+      </div>
+      <div class="card het-card">
+        <div class="k">Partial Risk</div>
+        <div class="v" id="stat-het">--</div>
+      </div>
+      <div class="card protect-card">
+        <div class="k">Protective</div>
+        <div class="v" id="stat-protect">--</div>
+      </div>
+    </div>
+
+    <div class="upload-controls">
+      <div>
+        <label>Raw DNA Source</label>
+        <select id="provider-select">
+          <option value="23andme">23andMe</option>
+          <option value="ancestry">Ancestry</option>
+          <option value="superkit" selected>Superkit</option>
+        </select>
+      </div>
+      <div>
+        <label>Upload Raw DNA (.txt)</label>
+        <input type="file" id="genotype-file" accept=".txt,.tsv,.csv" />
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button class="primary upload-btn" onclick="handleGenotypeUpload()">Load File</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div>
+        <label>Dataset</label>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="mode-all" onclick="setMode('all')">All SNPs (<span id="btn-count-all">--</span>)</button>
+          <button class="toggle-btn" id="mode-leads" onclick="setMode('leads')">Lead SNPs (<span id="btn-count-leads">--</span>)</button>
+        </div>
+      </div>
+      <div>
+        <label>Search SNP / Gene / Trait</label>
+        <input type="text" id="search-box" placeholder="e.g., rs3077, HLA, COVID" onkeyup="applyFilters()" />
+      </div>
+      <div>
+        <label>Virus Family</label>
+        <select id="family-filter" onchange="applyFilters()">
+          <option value="">All Families</option>
+        </select>
+      </div>
+      <div>
+        <label>Risk Filter</label>
+        <select id="risk-filter" onchange="applyFilters()">
+          <option value="">Any</option>
+          <option value="risk">Increased Risk</option>
+          <option value="het">Partial Risk</option>
+          <option value="protect">Protective</option>
+        </select>
+      </div>
+      <div>
+        <label>P-value ≤</label>
+        <select id="p-filter" onchange="applyFilters()">
+          <option value="5e-8">5e-8</option>
+          <option value="1e-10">1e-10</option>
+          <option value="1e-20">1e-20</option>
+        </select>
+      </div>
+      <div>
+        <label>Rows/Page</label>
+        <select id="pagesize" onchange="setPageSize()">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="250">250</option>
+        </select>
+      </div>
+      <button class="ghost" onclick="resetFilters()">Reset</button>
+    </div>
+
+    <div class="status" id="status">Loading...</div>
+    <div class="table-wrap">
+      <table id="data-table">
+        <thead>
+          <tr>
+            <th>SNP</th>
+            <th>Your Genetic Status</th>
+            <th>Risk Allele</th>
+            <th>Your Genotype</th>
+            <th>Copies</th>
+            <th>Virus Family</th>
+            <th>Trait</th>
+            <th>Reported Gene(s)</th>
+            <th style="cursor: pointer;" onclick="sortBy('p')">P-value <span id="sort-p" style="font-size: 0.8em; color: #999;"></span></th>
+            <th style="cursor: pointer;" onclick="sortBy('or')">OR/BETA <span id="sort-or" style="font-size: 0.8em; color: #999;"></span></th>
+            <th>PubMed</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <script>
+    let allData = [];
+    let leadsData = [];
+    let currentMode = 'all';
+    let currentPage = 1;
+    let pageSize = 50;
+    let genotypes = {};
+    let genotypeSourceLabel = 'No genotype file loaded';
+    let sortColumn = null;
+    let sortAscending = true;
+
+    async function init() {
+      try {
+        // Load all SNPs data
+        const allResp = await fetch('source_filtered_p5e8_superkit_rs_only_viral.tsv');
+        const allText = await allResp.text();
+        allData = parseCSV(allText);
+
+        // Load lead SNPs data
+        const leadsResp = await fetch('source_filtered_p5e8_superkit_rs_only_viral_ld_leads_only.tsv');
+        const leadsText = await leadsResp.text();
+        leadsData = parseCSV(leadsText);
+
+        updateDatasetCounts();
+        populateFamilyFilter();
+        render();
+      } catch (e) {
+        document.getElementById('status').textContent = `Error loading data: ${e.message}`;
+        console.error(e);
+      }
+    }
+
+    function parseCSV(text) {
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length === 0) return [];
+      const header = lines[0].split('\t');
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cells = lines[i].split('\t');
+        const row = {};
+        for (let j = 0; j < header.length; j++) {
+          row[header[j]] = cells[j] || '';
+        }
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function normalizeGenotype(gt) {
+      if (!gt) return '';
+      const clean = gt.trim().toUpperCase().replace(/\s+/g, '');
+      if (!clean || clean === '--' || clean === '00') return '';
+      if (/^[ACGT]{2}$/.test(clean)) return clean;
+      if (/^[ACGT]$/.test(clean)) return clean + clean;
+      return '';
+    }
+
+    function parseRawDnaFile(text, provider) {
+      const genoMap = {};
+      let parsedRows = 0;
+      let usableRows = 0;
+
+      for (const line of text.split('\n')) {
+        const raw = line.trim();
+        if (!raw || raw.startsWith('#')) continue;
+
+        const parts = raw.split(/\t|,/).map(p => p.trim());
+        if (parts.length < 2) continue;
+
+        let rsid = '';
+        for (const p of parts) {
+          if (/^rs\d+$/i.test(p)) {
+            rsid = p.toLowerCase();
+            break;
+          }
+        }
+        if (!rsid) continue;
+
+        parsedRows += 1;
+
+        let gt = '';
+        if (provider === '23andme' || provider === 'ancestry' || provider === 'superkit') {
+          gt = parts[3] || parts[parts.length - 1] || '';
+        }
+
+        if (!gt || !/^[ACGT\-0]{1,2}$/i.test(gt)) {
+          const guess = parts.find(p => /^([ACGT]{1,2}|--|00)$/i.test(p));
+          gt = guess || '';
+        }
+
+        const normalized = normalizeGenotype(gt);
+        if (!normalized) continue;
+
+        genoMap[rsid] = normalized;
+        usableRows += 1;
+      }
+
+      return { genoMap, parsedRows, usableRows };
+    }
+
+    function handleGenotypeUpload() {
+      const fileInput = document.getElementById('genotype-file');
+      const provider = document.getElementById('provider-select').value;
+      const loadBtn = document.querySelector('.upload-btn');
+      const file = fileInput.files && fileInput.files[0];
+
+      if (!file) {
+        alert('Please choose a raw DNA file first.');
+        return;
+      }
+
+      if (loadBtn) {
+        loadBtn.classList.add('loading');
+        loadBtn.classList.remove('loaded');
+        loadBtn.textContent = 'Loading...';
+        loadBtn.disabled = true;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = String(reader.result || '');
+          const parsed = parseRawDnaFile(text, provider);
+          genotypes = parsed.genoMap;
+          genotypeSourceLabel = `Loaded ${Object.keys(genotypes).length.toLocaleString()} SNP genotypes from ${provider.toUpperCase()} file`;
+          currentPage = 1;
+          updateDatasetCounts();
+          populateFamilyFilter();
+          render();
+          document.body.classList.add('genotype-loaded');
+          if (loadBtn) {
+            loadBtn.classList.remove('loading');
+            loadBtn.classList.add('loaded');
+            loadBtn.textContent = 'Loaded ✓';
+            loadBtn.disabled = false;
+          }
+        } catch (err) {
+          console.error(err);
+          alert(`Could not parse the file: ${err.message}`);
+          document.body.classList.remove('genotype-loaded');
+          if (loadBtn) {
+            loadBtn.classList.remove('loading');
+            loadBtn.textContent = 'Load File';
+            loadBtn.disabled = false;
+          }
+        }
+      };
+      reader.onerror = () => {
+        alert('Could not read the selected file.');
+        document.body.classList.remove('genotype-loaded');
+        if (loadBtn) {
+          loadBtn.classList.remove('loading');
+          loadBtn.textContent = 'Load File';
+          loadBtn.disabled = false;
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function updateLoadButtonState() {
+      const fileInput = document.getElementById('genotype-file');
+      const loadBtn = document.querySelector('.upload-btn');
+      if (!fileInput || !loadBtn) return;
+      const hasFile = !!(fileInput.files && fileInput.files.length > 0);
+      document.body.classList.remove('genotype-loaded');
+      loadBtn.classList.remove('loaded');
+      loadBtn.textContent = 'Load File';
+      loadBtn.disabled = false;
+      loadBtn.classList.toggle('ready', hasFile);
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      currentPage = 1;
+      document.getElementById('mode-all').classList.toggle('active', mode === 'all');
+      document.getElementById('mode-leads').classList.toggle('active', mode === 'leads');
+      updateDatasetCounts();
+      populateFamilyFilter();
+      applyFilters();
+    }
+
+    function getGenotypedRows(data) {
+      return data.filter(row => {
+        const snp = (row['SNPS'] || '').split(';')[0].trim().toLowerCase();
+        return !!genotypes[snp];
+      });
+    }
+
+    function updateDatasetCounts() {
+      const allCount = getGenotypedRows(allData).length;
+      const leadCount = getGenotypedRows(leadsData).length;
+      document.getElementById('count-all').textContent = allCount;
+      document.getElementById('count-leads').textContent = leadCount;
+      document.getElementById('btn-count-all').textContent = allCount;
+      document.getElementById('btn-count-leads').textContent = leadCount;
+    }
+
+    function populateFamilyFilter() {
+      const data = currentMode === 'all' ? allData : leadsData;
+      const genotypedData = getGenotypedRows(data);
+      // Count associations per family
+      const familyCounts = {};
+      for (const row of genotypedData) {
+        const fam = row.virus_family;
+        if (fam) familyCounts[fam] = (familyCounts[fam] || 0) + 1;
+      }
+      // Sort families by count (descending)
+      const families = Object.keys(familyCounts).sort((a, b) => familyCounts[b] - familyCounts[a]);
+      const sel = document.getElementById('family-filter');
+      const curr = sel.value;
+      sel.innerHTML = '<option value="">All Families</option>';
+      for (const fam of families) {
+        sel.innerHTML += `<option value="${fam}">${fam} (${familyCounts[fam]})</option>`;
+      }
+      sel.value = curr;
+    }
+
+    function calculateRiskStatus(rsid, riskAlleleStr) {
+      rsid = rsid.toLowerCase();
+      const gt = genotypes[rsid];
+      if (!gt) return { status: 'unknown', copies: -1 };
+      
+      // Extract risk allele from "rsXXXX-A" format (take letter after dash)
+      let riskAllele = '';
+      if (riskAlleleStr) {
+        const match = riskAlleleStr.match(/([ACGT])\s*$/);
+        riskAllele = match ? match[1] : '';
+      }
+      
+      if (!riskAllele) return { status: 'unknown', copies: -1 };
+      
+      // Count how many copies of risk allele
+      const copies = (gt.match(new RegExp(riskAllele, 'g')) || []).length;
+      if (copies === 2) return { status: 'risk', copies };
+      if (copies === 1) return { status: 'het', copies };
+      return { status: 'protect', copies };
+    }
+
+    function getFiltered() {
+      const data = currentMode === 'all' ? allData : leadsData;
+      const genotypedData = getGenotypedRows(data);
+      const familyFilter = document.getElementById('family-filter').value;
+      const riskFilter = document.getElementById('risk-filter').value;
+      const pFilter = parseFloat(document.getElementById('p-filter').value);
+      const searchTerm = document.getElementById('search-box').value.toLowerCase();
+
+      let filtered = genotypedData.filter(row => {
+        const p = parseFloat(row['P-VALUE']) || 0;
+        if (p > pFilter) return false;
+        if (familyFilter && row.virus_family !== familyFilter) return false;
+        if (riskFilter) {
+          const risk = calculateRiskStatus(row['SNPS'].split(';')[0], row['STRONGEST SNP-RISK ALLELE']).status;
+          if (risk !== riskFilter) return false;
+        }
+        if (searchTerm) {
+          const snp = row['SNPS'].toLowerCase();
+          const trait = (row['DISEASE/TRAIT'] || row['MAPPED_TRAIT'] || '').toLowerCase();
+          const gene = (row['REPORTED GENE(S)'] || '').toLowerCase();
+          if (!snp.includes(searchTerm) && !trait.includes(searchTerm) && !gene.includes(searchTerm)) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      // Apply sorting
+      if (sortColumn === 'p') {
+        filtered.sort((a, b) => {
+          const aVal = parseFloat(a['P-VALUE']) || 0;
+          const bVal = parseFloat(b['P-VALUE']) || 0;
+          return sortAscending ? aVal - bVal : bVal - aVal;
+        });
+      } else if (sortColumn === 'or') {
+        filtered.sort((a, b) => {
+          const aVal = parseFloat(a['OR or BETA']) || 0;
+          const bVal = parseFloat(b['OR or BETA']) || 0;
+          return sortAscending ? aVal - bVal : bVal - aVal;
+        });
+      }
+
+      return filtered;
+    }
+
+    function applyFilters() {
+      currentPage = 1;
+      render();
+    }
+
+    function render() {
+      const filtered = getFiltered();
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize;
+      const page = filtered.slice(start, end);
+
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+
+      for (const row of page) {
+        const snp = row['SNPS'].split(';')[0].toLowerCase();
+        const risk = calculateRiskStatus(snp, row['STRONGEST SNP-RISK ALLELE']);
+        const riskAlleleStr = row['STRONGEST SNP-RISK ALLELE'] || '';
+        const riskAllele = riskAlleleStr.match(/([ACGT])\s*$/) ? riskAlleleStr.match(/([ACGT])\s*$/)[1] : '-';
+        const gt = genotypes[snp] || '--';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${snp}</td>
+          <td><span class="badge ${risk.status}">${risk.status === 'unknown' ? '?' : (risk.status === 'risk' ? 'Increased Risk' : (risk.status === 'het' ? 'Partial Risk' : 'Protective'))}</span></td>
+          <td>${riskAllele}</td>
+          <td><span class="genotype">${gt}</span></td>
+          <td>${risk.copies >= 0 ? risk.copies : '-'}</td>
+          <td>${row.virus_family || '-'}</td>
+          <td>${row['DISEASE/TRAIT'] || row['MAPPED_TRAIT'] || '-'}</td>
+          <td>${row['REPORTED GENE(S)'] || '-'}</td>
+          <td><code>${parseFloat(row['P-VALUE']).toExponential(1)}</code></td>
+          <td>${row['OR or BETA'] || '-'}</td>
+          <td><a class="pmid-link" href="https://pubmed.ncbi.nlm.nih.gov/${row['PUBMEDID']}" target="_blank">${row['PUBMEDID']}</a></td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      document.getElementById('stat-total').textContent = filtered.length;
+      document.getElementById('stat-risk').textContent = filtered.filter(r => calculateRiskStatus(r['SNPS'].split(';')[0], r['STRONGEST SNP-RISK ALLELE']).status === 'risk').length;
+      document.getElementById('stat-het').textContent = filtered.filter(r => calculateRiskStatus(r['SNPS'].split(';')[0], r['STRONGEST SNP-RISK ALLELE']).status === 'het').length;
+      document.getElementById('stat-protect').textContent = filtered.filter(r => calculateRiskStatus(r['SNPS'].split(';')[0], r['STRONGEST SNP-RISK ALLELE']).status === 'protect').length;
+
+      const statusPrefix = filtered.length > 0
+        ? `Showing ${start + 1}–${Math.min(end, filtered.length)} of ${filtered.length} rows`
+        : 'Showing 0 of 0 rows';
+      document.getElementById('status').textContent = `${statusPrefix} • ${genotypeSourceLabel}`;
+
+      const pages = Math.ceil(filtered.length / pageSize);
+      const pg = document.getElementById('pagination');
+      pg.innerHTML = '';
+      for (let i = 1; i <= pages; i++) {
+        const btn = document.createElement('button');
+        btn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+        btn.textContent = i;
+        btn.onclick = () => { currentPage = i; render(); };
+        pg.appendChild(btn);
+      }
+    }
+
+    function resetFilters() {
+      document.getElementById('family-filter').value = '';
+      document.getElementById('risk-filter').value = '';
+      document.getElementById('p-filter').value = '5e-8';
+      document.getElementById('search-box').value = '';
+      sortColumn = null;
+      sortAscending = true;
+      updateSortIndicators();
+      currentPage = 1;
+      render();
+    }
+
+    function setPageSize() {
+      pageSize = parseInt(document.getElementById('pagesize').value);
+      currentPage = 1;
+      render();
+    }
+
+    function downloadTable() {
+      const filtered = getFiltered();
+      let csv = 'SNP\tYour Genetic Status\tRisk Allele\tYour Genotype\tCopies\tVirus Family\tTrait\tReported Gene(s)\tP-value\tOR/BETA\tPubMed\n';
+      for (const row of filtered) {
+        const snp = row['SNPS'].split(';')[0].toLowerCase();
+        const risk = calculateRiskStatus(snp, row['STRONGEST SNP-RISK ALLELE']);
+        const riskAlleleStr = row['STRONGEST SNP-RISK ALLELE'] || '';
+        const riskAllele = riskAlleleStr.match(/([ACGT])\s*$/) ? riskAlleleStr.match(/([ACGT])\s*$/)[1] : '-';
+        const gt = genotypes[snp] || '--';
+        const statusLabel = risk.status === 'risk' ? 'Increased Risk' : (risk.status === 'het' ? 'Partial Risk' : (risk.status === 'protect' ? 'Protective' : 'Unknown'));
+        csv += `${snp}\t${statusLabel}\t${riskAllele}\t${gt}\t${risk.copies >= 0 ? risk.copies : '-'}\t${row.virus_family}\t${row['DISEASE/TRAIT']}\t${row['REPORTED GENE(S)']}\t${row['P-VALUE']}\t${row['OR or BETA'] || '-'}\t${row['PUBMEDID']}\n`;
+      }
+      const blob = new Blob([csv], { type: 'text/tab-separated-values' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `viral_gwas_${currentMode}_${new Date().toISOString().split('T')[0]}.tsv`;
+      a.click();
+    }
+
+    function sortBy(col) {
+      if (sortColumn === col) {
+        sortAscending = !sortAscending;
+      } else {
+        sortColumn = col;
+        sortAscending = true;
+      }
+      updateSortIndicators();
+      currentPage = 1;
+      render();
+    }
+
+    function updateSortIndicators() {
+      document.getElementById('sort-p').textContent = '';
+      document.getElementById('sort-or').textContent = '';
+      if (sortColumn === 'p') {
+        document.getElementById('sort-p').textContent = sortAscending ? '↑' : '↓';
+      } else if (sortColumn === 'or') {
+        document.getElementById('sort-or').textContent = sortAscending ? '↑' : '↓';
+      }
+    }
+
+    init();
+    document.getElementById('genotype-file').addEventListener('change', updateLoadButtonState);
+  </script>
+
+  <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 0.85rem; text-align: center;">
+    <p style="margin: 12px 0; background: var(--ku-blue); color: white; padding: 12px; border-radius: 6px; text-align: left; line-height: 1.6;">
+      <strong>⚠️ Disclaimer:</strong> This tool provides mere exploratory analysis based on published GWAS associations. 
+      Results are subject to important limitations: (1) GWAS identify statistical associations in large populations, not deterministic genetic risks; 
+      (2) Imperfect linkage disequilibrium correction means SNPs may proxy for unmeasured variants; 
+      (3) Transferability across populations varies, so associations identified in one ancestry may not apply to others; 
+      (4) Risk stratification is preliminary and not a substitute for clinical assessment or medical advice. 
+      Users should interpret results cautiously and consult healthcare professionals for medical decisions.
+    </p>
+    <p style="margin: 12px 0; background: var(--ku-blue); color: white; padding: 12px; border-radius: 6px; text-align: center; line-height: 1.6;">
+      <strong>Open Source Project by</strong> <a href="https://www.linkedin.com/in/ashbargallo" target="_blank" style="color: white; text-decoration: underline; font-weight: 600;">Ash</a>
+    </p>
+  </footer>
+</body>
+</html>
