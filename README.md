@@ -1,6 +1,6 @@
 # Viral GWAS Associations Explorer
 
-Interactive web tool for exploring viral GWAS associations from the NHGRI-EBI GWAS Catalog. Upload your 23andMe, Ancestry, or Superkit genotype file to see your genetic risk profile for viral infections.
+Interactive web tool for exploring viral GWAS associations from the NHGRI-EBI GWAS Catalog. Upload your 23andMe, Ancestry, or superkit genotype file to see your genetic risk profile for viral infections.
 
 ## Features
 
@@ -21,5 +21,7 @@ Simply open `index.html` in a web browser. No installation required.
 
 ## Privacy
 
-All data processing happens locally in your browser. Your genotype file is never transmitted to any server.
+All data processing happens locally in your browser.
+
+RCJH
 
